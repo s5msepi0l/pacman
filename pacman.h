@@ -19,12 +19,21 @@
 #define WIDTH ROWS * BOXSIZE
 #define HEIGHT COLUMNS * BOXSIZE
 
-#define WHITE  0
-#define BLACK  1 //reserved for walls
+#define BLACK  0
+#define BLUE   1 //reserved for walls
 #define RED    2
 #define GREEN  3
-#define BLUE   4
-#define YELLOW 5
+#define WHITE  4
+#define YELLOW 5 //reserved for coin spawn position
+
+/*TODO:
+    - coin generation and pickup
+    - enemy ghosts
+    - gameover screen
+    - sound effects
+    - show flashing coins and timer
+    - infinate gameloop
+*/
 
 // .bss
 uint8_t screen [COLUMNS][ROWS]{{0}};
@@ -48,6 +57,8 @@ class player {
         direction dir;
         direction queued_dir;
 
+
+    public:
         int points = 0;
 
     public:
@@ -73,6 +84,16 @@ class player {
 
         //sets queued movement
         inline void move(direction dir_src) {
+            //check if player uses portal
+            if ((pos.y <= 7 && pos.y >= 5)) {
+                if(pos.x <= -1)
+                    pos.x = 22;
+                
+                if (pos.x >= 23) {
+                    pos.x = 0;
+                }
+            }
+
             if (valid_movement(dir_src)) {
                 move_dir(dir);
             } else if (valid_movement(dir)) move_dir(dir);
@@ -89,25 +110,27 @@ class player {
         bool valid_movement(direction dir_src) {
             switch(dir_src) {
                 case direction::forward:
-                    if (screen[pos.y-1][pos.x] != BLACK){
+                    if (screen[pos.y-1][pos.x] != BLUE){
                         //pos.y--;
                         return true;
                     } else return false;
                     
                 case direction::backward:
-                    if (screen[pos.y + 1][pos.x] != BLACK){
+                    if (screen[pos.y + 1][pos.x] != BLUE){
                         //pos.y++;
                         return true;
                     } else return false;  
 
                 case direction::right:
-                    if (screen[pos.y][pos.x + 1] != BLACK){
+                if (pos.x+1 >= ROWS) return true;
+                    if (screen[pos.y][pos.x + 1] != BLUE){
                         //pos.x++;
                         return true;
                     } else return false;
 
                 case direction::left:
-                    if (screen[pos.y][pos.x - 1] != BLACK){
+                    if (pos.y-1 <= -1) return true;
+                    if (screen[pos.y][pos.x - 1] != BLUE){
                         //pos.x--;
                         return true;
                     } else return false;                        
@@ -183,14 +206,12 @@ class w_window {
 
 		void render(player &p) {
             SDL_RenderPresent(renderer);
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);	
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);	
             SDL_RenderClear(renderer);
 
             //FRAME GENERATION
             for (int i = 0; i<COLUMNS; i++) {
                 for (int j = 0; j<ROWS; j++) {
-
-
                     SDL_Rect rect;
                     rect.x = j * BOXSIZE;
                     rect.y = i * BOXSIZE;
@@ -217,6 +238,16 @@ class w_window {
                         case BLUE:
                             SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
                             break;
+                        
+                        case YELLOW: //reserved for coins, typically 1/3 the size of a normal tile
+
+                            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+                            
+                            rect.x = j * BOXSIZE + (BOXSIZE * 0.4);
+                            rect.y = i * BOXSIZE + (BOXSIZE * 0.4);
+                            rect.w = BOXSIZE /5;
+                            rect.h = BOXSIZE /5;
+                            break;
                     }
                                             
                     SDL_RenderFillRect(renderer, &rect);
@@ -229,8 +260,7 @@ class w_window {
             //render player, enemies, coins, etc
             position *player_pos = p.get_pos();
 
-            std::cout << "position x: " << (int)player_pos->x << ", y: " << (int)player_pos->y << '\n';
-            p.move(p.get_dir());
+            //p.move(p.get_dir());
             
             SDL_Rect rect;
             // no gadamn clue why this works
@@ -239,7 +269,7 @@ class w_window {
             rect.w = BOXSIZE;
             rect.h = BOXSIZE;
 
-            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+            SDL_SetRenderDrawColor(renderer, 255, 165, 0, 255);
             SDL_RenderFillRect(renderer, &rect);
 
 
@@ -289,15 +319,16 @@ class pacman {
         }
 
     void run() {
-
         uint32_t start_time = 0, end_time = 0, elapsed_time;
+        position *pos = client.get_pos();
+        
         while (running) {
             while (SDL_PollEvent(&event) != 0) {
                 if (event.type == SDL_QUIT) {
                     running = false;
                 }
                 if (event.type == SDL_KEYDOWN) {
-            start_time = SDL_GetTicks();
+                    start_time = SDL_GetTicks();
                     switch( event.key.keysym.sym ) {
                         case SDLK_UP: 
                             std::cout << "up\n";
@@ -324,14 +355,21 @@ class pacman {
                             std::cout << "idfk bro\n";
                             break; 
                         }
-                end_time = SDL_GetTicks();
+                    end_time = SDL_GetTicks();
                 } 
                 
             }
+            client.move(client.get_dir());
+            //words cannot explain my sheer confusion to as why in hell this works
+            if (screen[pos->y][pos->x] == YELLOW) {
+                screen[pos->y][pos->x] = BLACK;
+                client.points++;
+            }
+
+            std::cout << "points: " << client.points << '\n';
+
 
             window.render(client);
-            
-
             elapsed_time = end_time - start_time;
             if (elapsed_time < TARGET_FRAMETIME) {
                 SDL_Delay(TARGET_FRAMETIME - elapsed_time); 
